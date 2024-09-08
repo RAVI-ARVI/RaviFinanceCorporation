@@ -1,0 +1,12 @@
+{
+  "name": "fintech",
+  "version": "1.0.0",
+  "description": "this ravi finace project",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev":"nodemon src/index.js"
+  },
+  "author": "ravi",
+  "license": "ISC"
+}
