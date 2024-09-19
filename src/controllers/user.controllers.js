@@ -87,6 +87,7 @@ const registerUser = asyncHandler(async (req, res) => {
 })
 
 const getAllUsers = asyncHandler(async (req, res) => {
+    
     const allUsers = await User.find().select('-password -customers')
     
     res.status(201).json({
