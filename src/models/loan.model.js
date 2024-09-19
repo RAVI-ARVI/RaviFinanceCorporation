@@ -23,7 +23,11 @@ const loanSchema = new mongoose.Schema({
     totalInterestPaid: {
       type: Number,
       default: 0 // Tracks the total interest paid for interest loans
-    },
+  },
+  collectedPrincipalAmount: {
+    type: Number,
+    default: 0, // For interest loans, tracks principal payments
+  },
     durationDays: Number, // For corporation loans
     interestDuePeriod: {
       type: String,
