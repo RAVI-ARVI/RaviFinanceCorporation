@@ -1,3 +1,4 @@
+import { Customer } from "../models/customer.model.js"
 import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/Apierror.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
@@ -258,8 +259,22 @@ const updateUserCoverImage = asyncHandler(async(req, res) => {
 })
 
 
-//todo
-const getAgentCustomers = asyncHandler(async (req, res) => { })
+
+const getAgentCustomers = asyncHandler(async (req, res) => {
+  
+
+    // Fetch customers where the agentId matches the logged-in agent's ID
+    const customers = await Customer.find({ createdBy: req.user._id  }).select('-password'); // Exclude sensitive fields if necessary
+console.log(customers,"c")
+    if (!customers || customers.length === 0) {
+        throw new ApiError(404, "No customers found for this agent");
+    }
+
+    return res.status(200).json({
+        success: true,
+        customers,
+    });
+});
 
 export { changeCurrentPassword, getAgentCustomers, getAllUsers, loginUser, logoutUser, registerUser, updateUserAvatar, updateUserCoverImage }
 

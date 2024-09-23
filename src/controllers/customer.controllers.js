@@ -7,7 +7,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 const createCustomer = asyncHandler(async (req, res) => {
     const { name, email, phone  ,address} = req.body;
     if (
-        [name, email, phone].some((field) => !field || field.trim() === "")
+        [name,  phone].some((field) => !field || field.trim() === "")
       ) {
         throw new ApiError(400, "All fields are required");
     }
@@ -200,6 +200,45 @@ const addLoan = asyncHandler(async (req, res) => {
     
 })
 
+const deleteLoan = asyncHandler(async (req, res) => {
+  const { customerId, loanId } = req.params;
+
+  // Fetch the customer and loan
+  const customer = await Customer.findById(customerId);
+  const loan = await Loan.findById(loanId);
+
+  if (!customer || !loan) {
+    return res.status(404).json({ message: "Customer or Loan not found" });
+  }
+
+  // Ensure the loan belongs to the customer
+  if (String(loan.customer) !== customerId) {
+    return res.status(400).json({ message: "Loan does not belong to this customer" });
+  }
+
+// Check if there are any transactions for the loan
+const loanTransactions = await Transaction.find({ loan: loanId });
+
+if (loanTransactions.length > 0) {
+  return res.status(400).json({
+    message: "Cannot delete the loan because there are associated transactions."
+  });
+}
+
+  // Remove loan from the customer's loan array
+  customer.loans = customer.loans.filter((id) => id.toString() !== loanId);
+  await customer.save();
+
+  // Delete the loan itself
+  await loan.deleteOne();
+
+  return res.status(200).json({
+    message: "Loan deleted successfully",
+  });
+});
+
+
+
 const recordTransaction = asyncHandler(async (req, res) => {
     const { customerId } = req.params;
     const { transactionType, amount, loanId } = req.body;
@@ -298,5 +337,5 @@ const recordTransaction = asyncHandler(async (req, res) => {
     
 })
 
-export { addLoan, createCustomer, getAllCustomers, getCustomerDetails, recordTransaction };
+export { addLoan, createCustomer, deleteLoan, getAllCustomers, getCustomerDetails, recordTransaction };
 
