@@ -92,14 +92,13 @@ const getCustomerDetails = asyncHandler(async(req, res) => {
       return res.status(404).json({ message: "Customer not found" });
     }
 
-    // const customerDetails = await Customer.findById(customerId)
 
-    // console.log(customerDetails)
+
 
 
     // Aggregation to gather customer loans and transaction details
     const customerDetails = await Customer.aggregate([
-        { $match: { _id: customer._id } },
+        { $match: { _id:customer._id} },
         {
           $lookup: {
             from: 'loans',
@@ -121,9 +120,25 @@ const getCustomerDetails = asyncHandler(async(req, res) => {
             totalLoanAmount: { $sum: '$loans.principalAmount' }, // Sum of all loan principal amounts
             totalPaidAmount: { $sum: '$loans.amountPaid' }, // Total paid for corporation loans
             totalInterestPaid: { $sum: '$loans.totalInterestPaid' }, // Total interest paid for interest loans
+            remainingAmount: {
+              $sum: {
+                $map: {
+                  input: '$loans',
+                  as: 'loan',
+                  in: {
+                    $cond: [
+                      { $eq: ['$$loan.loanType', 'corporation'] },
+                      { $subtract: ['$$loan.repaymentAmount', '$$loan.amountPaid'] }, // Remaining for corporation loans
+                      { $subtract: ['$$loan.principalAmount', '$$loan.collectedPrincipalAmount'] } // Remaining for interest loans
+                    ]
+                  }
+                }
+              }
+            }
           }
         }
-      ]);
+    ]);
+ 
   
       // If customer has no loans or transactions, return basic info
       if (!customerDetails.length) {
@@ -135,6 +150,7 @@ const getCustomerDetails = asyncHandler(async(req, res) => {
           totalLoanAmount: 0,
           totalPaidAmount: 0,
           totalInterestPaid: 0,
+          remainingAmount: 0,
         });
       }
   
@@ -153,7 +169,7 @@ const addLoan = asyncHandler(async (req, res) => {
     const { customerId } = req.params;
     const {
         loanType, principalAmount, interestRate, repaymentAmount, durationDays,
-        interestDuePeriod, startDate, endDate, createdBy
+        interestDuePeriod, startDate, endDate, createdBy,loanName
     } = req.body;
     const isInterestLoan = loanType === 'interest';
     const isCorporationLoan = loanType === 'corporation';
@@ -173,17 +189,31 @@ const addLoan = asyncHandler(async (req, res) => {
       } else {
         return res.status(400).json({ message: "Invalid loan type" });
       }
+    // Check if loan name is unique
+    const existingLoan = await Loan.findOne({ loanName });
+    if (existingLoan) {
+      return res.status(400).json({ message: 'Loan with this name already exists' });
+    }
+   // Set default start date to now if not provided
+   const startLoanDate = startDate ? new Date(startDate) : new Date();
+
+   // Automatically calculate the end date if durationDays is provided and endDate is not
+   let calculatedEndDate = endDate;
+   if (!calculatedEndDate && durationDays) {
+    calculatedEndDate = new Date(startLoanDate.getTime() + durationDays * 24 * 60 * 60 * 1000); // Adding durationDays in milliseconds
+  }
     
       const loanData = {
         customer: customerId,
+        loanName,
         loanType,
         principalAmount,
         interestRate: isInterestLoan ? interestRate : undefined,
         repaymentAmount: isCorporationLoan ? repaymentAmount : undefined,
         durationDays: isCorporationLoan ? durationDays : undefined,
         interestDuePeriod: isInterestLoan ? interestDuePeriod : undefined,
-        startDate: startDate || Date.now(),
-        endDate,
+        startDate: startLoanDate,
+        endDate:calculatedEndDate ,
         createdBy:req.user.id,
       };
 
@@ -241,7 +271,7 @@ if (loanTransactions.length > 0) {
 
 const recordTransaction = asyncHandler(async (req, res) => {
     const { customerId } = req.params;
-    const { transactionType, amount, loanId } = req.body;
+    const { transactionType, amount, loanId ,paymentDate } = req.body;
     const agentId = req.user.id; // Assuming authenticated user info
   
     // Fetch the customer and loan
@@ -287,7 +317,7 @@ const recordTransaction = asyncHandler(async (req, res) => {
     };
   
     const handleInterestPayment = () => {
-      loan.totalInterestPaid += amount;
+      loan.totalInterestPaid += Number(amount);
       interestPaid = loan.totalInterestPaid;
     };
   
@@ -302,7 +332,7 @@ const recordTransaction = asyncHandler(async (req, res) => {
     };
   
     const handleCorporationPayment = () => {
-      loan.amountPaid += amount;
+      loan.amountPaid += Number(amount);
       remainingAmount = loan.repaymentAmount - loan.amountPaid;
   
       // Close loan if fully repaid
@@ -321,7 +351,7 @@ const recordTransaction = asyncHandler(async (req, res) => {
         loan: loanId,
         transactionType,
         amount,
-        paymentDate: new Date(),
+        paymentDate:paymentDate || new Date() ,
         agent: agentId,
         remainingAmount, // Only relevant for corporation payments
         interestPaid,    // Only relevant for interest payments

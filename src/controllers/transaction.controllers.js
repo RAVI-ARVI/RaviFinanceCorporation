@@ -40,7 +40,7 @@ const deleteTransaction = asyncHandler(async (req, res) => {
   
       // Reopen the loan if it was closed and has outstanding payments
       if (loan.status === "closed" && loan.amountPaid < loan.repaymentAmount) {
-        loan.status = "open";
+        loan.status = "active";
       }
     }
   

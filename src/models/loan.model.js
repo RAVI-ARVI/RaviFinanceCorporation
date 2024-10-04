@@ -1,9 +1,16 @@
 import mongoose from "mongoose";
 const loanSchema = new mongoose.Schema({
+  loanName: {
+    type: String,
+    required: [true, "Loan Name Is Required"],
+    unique:true
+    
+  },
+  
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',
-      required: true
+   
     },
     loanType: {
       type: String,
