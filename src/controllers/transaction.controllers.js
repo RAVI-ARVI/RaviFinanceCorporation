@@ -1,24 +1,23 @@
-import CashFlow from "../models/cashFlow.model.js"
-import { Loan } from "../models/loan.model.js"
-import { Transaction } from "../models/transaction.model.js"
-import { asyncHandler } from "../utils/asyncHandler.js"
+import CashFlow from "../models/cashFlow.model.js";
+import { Loan } from "../models/loan.model.js";
+import { Transaction } from "../models/transaction.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 const getAllTransactions = asyncHandler(async (req, res) => {
-    const allTransactions = await Transaction.find()
-    res.status(201).json({
-        success: true,
-        data:allTransactions
-    })
-     
-})
+  const allTransactions = await Transaction.find();
+  res.status(201).json({
+    success: true,
+    data: allTransactions,
+  });
+});
 
 const cashFlowStatement = asyncHandler(async (req, res) => {
   const cashflow = await CashFlow.findOne();
   res.status(200).json({
     success: true,
-    data:cashflow
-  })
-})
+    data: cashflow,
+  });
+});
 
 const deleteTransaction = asyncHandler(async (req, res) => {
   const { transactionId } = req.params;
@@ -82,8 +81,4 @@ const deleteTransaction = asyncHandler(async (req, res) => {
   });
 });
 
-  
- 
-
-export { cashFlowStatement, deleteTransaction, getAllTransactions }
-
+export { cashFlowStatement, deleteTransaction, getAllTransactions };
