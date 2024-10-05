@@ -127,15 +127,16 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const options = {
     httpOnly: true,
+
     expires: new Date(
       Date.now() + process.env.COOKIE_EXPIRE * 24 * 60 * 60 * 1000
     ),
-    // secure: true,
+    secure: true,
+    sameSite: "None",
   };
 
   return res
     .status(200)
-    .setHeader("SameSite", "true")
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
     .json({
@@ -161,6 +162,8 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   const options = {
     httpOnly: true,
+    secure: true,
+    sameSite: "None",
     expires: new Date(
       Date.now() + process.env.COOKIE_EXPIRE * 24 * 60 * 60 * 1000
     ),
@@ -168,7 +171,6 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .setHeader("SameSite", "true")
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
     .json({ message: "User logged Out" });
