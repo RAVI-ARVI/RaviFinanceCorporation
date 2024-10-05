@@ -1,3 +1,4 @@
+import CashFlow from "../models/cashFlow.model.js";
 import { Customer } from "../models/customer.model.js";
 import { Loan } from "../models/loan.model.js";
 import { Transaction } from "../models/transaction.model.js";
@@ -47,7 +48,8 @@ return res.status(201).json(
 
 
 const getAllCustomers = asyncHandler(async (req, res) => {
-       
+ 
+ 
     const allCustomers = await Customer.find().select('-loans -transactions')
     
     res.status(201).json({
@@ -166,69 +168,105 @@ const getCustomerDetails = asyncHandler(async(req, res) => {
 })
 
 const addLoan = asyncHandler(async (req, res) => {
-    const { customerId } = req.params;
-    const {
-        loanType, principalAmount, interestRate, repaymentAmount, durationDays,
-        interestDuePeriod, startDate, endDate, createdBy,loanName
-    } = req.body;
-    const isInterestLoan = loanType === 'interest';
-    const isCorporationLoan = loanType === 'corporation';
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
-    }
-      // Validate loan type and required fields based on type
-      if (loanType === 'interest') {
-        if (!interestRate || !interestDuePeriod) {
-          return res.status(400).json({ message: "Interest rate and due period are required for interest loans" });
-        }
-      } else if (loanType === 'corporation') {
-        if (!repaymentAmount || !durationDays) {
-          return res.status(400).json({ message: "Repayment amount and duration days are required for corporation loans" });
-        }
-      } else {
-        return res.status(400).json({ message: "Invalid loan type" });
-      }
-    // Check if loan name is unique
-    const existingLoan = await Loan.findOne({ loanName });
-    if (existingLoan) {
-      return res.status(400).json({ message: 'Loan with this name already exists' });
-    }
-   // Set default start date to now if not provided
-   const startLoanDate = startDate ? new Date(startDate) : new Date();
+  const { customerId } = req.params;
+  const {
+    loanType, principalAmount, interestRate, repaymentAmount, durationDays,
+    interestDuePeriod, startDate, endDate, createdBy, loanName
+  } = req.body;
 
-   // Automatically calculate the end date if durationDays is provided and endDate is not
-   let calculatedEndDate = endDate;
-   if (!calculatedEndDate && durationDays) {
-    calculatedEndDate = new Date(startLoanDate.getTime() + durationDays * 24 * 60 * 60 * 1000); // Adding durationDays in milliseconds
+  let cashFlow = await CashFlow.findOne();
+  if (!cashFlow) {
+    cashFlow = new CashFlow({
+      availableCash: 0,
+      corporationReceivable: 0,
+      principalReceivable: 0,
+      lastUpdated: Date.now()
+    });
+    await cashFlow.save();
   }
-    
-      const loanData = {
-        customer: customerId,
-        loanName,
-        loanType,
-        principalAmount,
-        interestRate: isInterestLoan ? interestRate : undefined,
-        repaymentAmount: isCorporationLoan ? repaymentAmount : undefined,
-        durationDays: isCorporationLoan ? durationDays : undefined,
-        interestDuePeriod: isInterestLoan ? interestDuePeriod : undefined,
-        startDate: startLoanDate,
-        endDate:calculatedEndDate ,
-        createdBy:req.user.id,
-      };
 
+  // Validate customer existence
+  const customer = await Customer.findById(customerId);
+  if (!customer) {
+    return res.status(404).json({ message: 'Customer not found' });
+  }
 
-    const newCustomerLoan = await Loan.create(loanData)
+  // Validate loan type and required fields based on type
+  if (loanType === 'interest') {
+    if (!interestRate || !interestDuePeriod) {
+      return res.status(400).json({ message: "Interest rate and due period are required for interest loans" });
+    }
+  } else if (loanType === 'corporation') {
+    if (!repaymentAmount || !durationDays) {
+      return res.status(400).json({ message: "Repayment amount and duration days are required for corporation loans" });
+    }
+  } else {
+    return res.status(400).json({ message: "Invalid loan type" });
+  }
+
+  // Check if loan name is unique
+  const existingLoan = await Loan.findOne({ loanName });
+  if (existingLoan) {
+    return res.status(400).json({ message: 'Loan with this name already exists' });
+  }
+
+  // Set default start date to now if not provided
+  const startLoanDate = startDate ? new Date(startDate) : new Date();
+
+  // Automatically calculate the end date if durationDays is provided and endDate is not
+  let calculatedEndDate = endDate;
+  if (!calculatedEndDate && durationDays) {
+    calculatedEndDate = new Date(startLoanDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  }
+
+  // Prepare loan data
+  const loanData = {
+    customer: customerId,
+    loanName,
+    loanType,
+    principalAmount,
+    interestRate: loanType === 'interest' ? interestRate : undefined,
+    repaymentAmount: loanType === 'corporation' ? repaymentAmount : undefined,
+    durationDays: loanType === 'corporation' ? durationDays : undefined,
+    interestDuePeriod: loanType === 'interest' ? interestDuePeriod : undefined,
+    startDate: startLoanDate,
+    endDate: calculatedEndDate,
+    createdBy: req.user.id,
+  };
+
+  // Validate and update cash flow
+  if (Number(principalAmount) <= 0) {
+    return res.status(400).json({ message: 'Principal amount must be greater than zero.' });
+  }
+
+  cashFlow.availableCash -= Number(principalAmount);
+
+  if (loanType === 'interest') {
+    cashFlow.principalReceivable += Number(principalAmount);
+  } else if (loanType === 'corporation') {
+    cashFlow.corporationReceivable += Number(repaymentAmount);
+  }
+
+  // Check for negative cash flow
+  if (cashFlow.availableCash < 0) {
+    return res.status(400).json({ message: 'Insufficient available cash.' });
+  }
+
+  try {
+    // Create the new loan
+    const newCustomerLoan = await Loan.create(loanData);
     customer.loans.push(newCustomerLoan._id);
     await customer.save();
+    await cashFlow.save();
 
     return res.status(201).json({
-        message: "Loan successfully added",
-        loan: newCustomerLoan,
-      });
-  
-    
-})
+      message: "Loan successfully added",
+      loan: newCustomerLoan,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Error adding loan', error: error.message });
+  }
+});
 
 const deleteLoan = asyncHandler(async (req, res) => {
   const { customerId, loanId } = req.params;
@@ -254,6 +292,32 @@ if (loanTransactions.length > 0) {
     message: "Cannot delete the loan because there are associated transactions."
   });
 }
+let cashFlow = await CashFlow.findOne();
+if (!cashFlow) {
+
+  cashFlow = new CashFlow({
+    availableCash: 0,
+    corporationReceivable: 0,
+    principalReceivable: 0,
+    lastUpdated: Date.now()
+  });
+
+
+  await cashFlow.save();
+}
+  
+if (loan.loanType === 'corporation') {
+  // Corporation loan: repaymentAmount affects corporationReceivable
+  cashFlow.availableCash += loan.principalAmount; // Add back the principal amount to available cash
+  cashFlow.corporationReceivable -= loan.repaymentAmount; // Decrease the receivable amount
+} else if (loan.loanType === 'interest') {
+  // Interest loan: principalAmount affects principalReceivable
+  cashFlow.availableCash += loan.principalAmount; // Add back the principal amount to available cash
+  cashFlow.principalReceivable -= loan.principalAmount; // Decrease the principal receivable amount
+}
+
+// Save updated cash flow
+await cashFlow.save();
 
   // Remove loan from the customer's loan array
   customer.loans = customer.loans.filter((id) => id.toString() !== loanId);
@@ -270,102 +334,111 @@ if (loanTransactions.length > 0) {
 
 
 const recordTransaction = asyncHandler(async (req, res) => {
-    const { customerId } = req.params;
-    const { transactionType, amount, loanId ,paymentDate } = req.body;
-    const agentId = req.user.id; // Assuming authenticated user info
-  
-    // Fetch the customer and loan
-    const customer = await Customer.findById(customerId);
-    const loan = await Loan.findById(loanId);
-  
-    if (!customer || !loan) {
-      return res.status(404).json({ message: 'Customer or Loan not found' });
-    }
-  
-    // Ensure the loan belongs to the customer
-    if (String(loan.customer) !== customerId) {
-      return res.status(400).json({ message: 'Loan does not belong to this customer' });
-    }
-  
-    // Validate the transaction type
-    if (!['interest payment', 'principal payment', 'corporation payment'].includes(transactionType)) {
-      return res.status(400).json({ message: 'Invalid transaction type' });
-    }
-  
-    // Variables to store loan updates
-    let remainingAmount = null;
-    let interestPaid = null;
-  
-    // Handle the transaction based on loan and transaction types
-    const handleTransaction = () => {
-      switch (loan.loanType) {
-        case 'interest':
-          if (transactionType === 'interest payment') {
-            return handleInterestPayment();
-          } else if (transactionType === 'principal payment') {
-            return handlePrincipalPayment();
-          }
-          break;
-        case 'corporation':
-          if (transactionType === 'corporation payment') {
-            return handleCorporationPayment();
-          }
-          break;
-        default:
-          throw new Error(`Invalid transaction for loan type: ${loan.loanType}`);
-      }
-    };
-  
-    const handleInterestPayment = () => {
-      loan.totalInterestPaid += Number(amount);
-      interestPaid = loan.totalInterestPaid;
-    };
-  
-    const handlePrincipalPayment = () => {
-      loan.principalAmount -= amount;
-  
-      // Ensure principal amount doesn't go below zero
-      if (loan.principalAmount <= 0) {
-        loan.principalAmount = 0;
-        loan.status = 'closed';
-      }
-    };
-  
-    const handleCorporationPayment = () => {
-      loan.amountPaid += Number(amount);
-      remainingAmount = loan.repaymentAmount - loan.amountPaid;
-  
-      // Close loan if fully repaid
-      if (loan.amountPaid >= loan.repaymentAmount) {
-        loan.status = 'closed';
-      }
-    };
-  
+  const { customerId } = req.params;
+  const { transactionType, amount, loanId, paymentDate } = req.body;
+  const agentId = req.user.id; // Assuming authenticated user info
 
-      handleTransaction();
-      await loan.save(); // Save loan after updating fields
-  
-      // Create the transaction record
-      const savedTransaction = await Transaction.create({
-        customer: customerId,
-        loan: loanId,
-        transactionType,
-        amount,
-        paymentDate:paymentDate || new Date() ,
-        agent: agentId,
-        remainingAmount, // Only relevant for corporation payments
-        interestPaid,    // Only relevant for interest payments
-      });
-  
-      return res.status(201).json({
-        message: 'Transaction recorded successfully',
-        transaction: savedTransaction,
-        updatedLoan: loan,
-      });
-    
+  // Validate amount
+  if (amount <= 0) {
+    return res.status(400).json({ message: 'Amount must be greater than zero.' });
+  }
 
+  let cashFlow = await CashFlow.findOne();
+  if (!cashFlow) {
+    cashFlow = new CashFlow({
+      availableCash: 0,
+      corporationReceivable: 0,
+      principalReceivable: 0,
+      lastUpdated: Date.now(),
+    });
+    await cashFlow.save();
+  }
+
+  // Fetch the customer and loan
+  const customer = await Customer.findById(customerId);
+  const loan = await Loan.findById(loanId);
+
+  if (!customer || !loan) {
+    return res.status(404).json({ message: 'Customer or Loan not found' });
+  }
+
+  // Ensure the loan belongs to the customer
+  if (String(loan.customer) !== customerId) {
+    return res.status(400).json({ message: 'Loan does not belong to this customer' });
+  }
+
+  // Validate the transaction type
+  if (!['interest payment', 'principal payment', 'corporation payment'].includes(transactionType)) {
+    return res.status(400).json({ message: 'Invalid transaction type' });
+  }
+
+  // Variables to store loan updates
+  let remainingAmount = null;
+  let interestPaid = null;
+
+  // Handle the transaction based on loan and transaction types
+  try {
+    switch (loan.loanType) {
+      case 'interest':
+        if (transactionType === 'interest payment') {
+          loan.totalInterestPaid += Number(amount);
+          interestPaid = loan.totalInterestPaid;
+          cashFlow.availableCash += Number(amount);
+        } else if (transactionType === 'principal payment') {
+          loan.principalAmount -= Number(amount);
+          cashFlow.availableCash += Number(amount);
+          cashFlow.principalReceivable -= Number(amount);
+
+          // Ensure principal amount doesn't go below zero
+          if (loan.principalAmount < 0) {
+            loan.principalAmount = 0;
+            loan.status = 'closed';
+          }
+        }
+        break;
+      case 'corporation':
+        if (transactionType === 'corporation payment') {
+          loan.amountPaid += Number(amount);
+          remainingAmount = loan.repaymentAmount - loan.amountPaid;
+          cashFlow.availableCash += Number(amount);
+          cashFlow.corporationReceivable -= Number(amount);
+
+          // Close loan if fully repaid
+          if (loan.amountPaid >= loan.repaymentAmount) {
+            loan.status = 'closed';
+          }
+        }
+        break;
+      default:
+        return res.status(400).json({ message: `Invalid loan type: ${loan.loanType}` });
+    }
     
-})
+    // Save the updated loan and cash flow
+    await loan.save();
+    await cashFlow.save();
+
+    // Create the transaction record
+    const savedTransaction = await Transaction.create({
+      customer: customerId,
+      loan: loanId,
+      transactionType,
+      amount,
+      paymentDate: paymentDate || new Date(),
+      agent: agentId,
+      remainingAmount, // Only relevant for corporation payments
+      interestPaid,     // Only relevant for interest payments
+    });
+
+    return res.status(201).json({
+      message: 'Transaction recorded successfully',
+      transaction: savedTransaction,
+      updatedLoan: loan,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Error recording transaction', error: error.message });
+  }
+});
+
 
 export { addLoan, createCustomer, deleteLoan, getAllCustomers, getCustomerDetails, recordTransaction };
 

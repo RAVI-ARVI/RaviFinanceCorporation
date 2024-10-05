@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { deleteTransaction, getAllTransactions } from "../controllers/transaction.controllers.js";
+import { cashFlowStatement, deleteTransaction, getAllTransactions } from "../controllers/transaction.controllers.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 const router = Router()
 
@@ -8,6 +8,7 @@ const router = Router()
 
 
 router.get('/get-all', verifyJWT, getAllTransactions)
+router.get('/cashflow',verifyJWT,cashFlowStatement)
 
 router.delete('/:transactionId', verifyJWT, deleteTransaction)
 
