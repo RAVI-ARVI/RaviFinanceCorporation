@@ -21,7 +21,7 @@ const generateAccessAndRefereshTokens = async(userId) =>{
 }
 
 const registerUser = asyncHandler(async (req, res) => { 
-    
+      
     const { fullName, email, username, password,role } = req.body
  
     
@@ -126,9 +126,8 @@ const loginUser = asyncHandler(async (req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true,
-        path: '/',
-        maxAge: 24 * 60 * 60 * 1000
+        // secure: true,
+      
     }
 
     return res
@@ -159,9 +158,8 @@ const logoutUser = asyncHandler(async(req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true,
-        path: '/',
-        maxAge: 24 * 60 * 60 * 1000
+        // secure: true,
+       
     }
 
     return res

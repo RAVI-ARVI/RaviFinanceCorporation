@@ -16,7 +16,7 @@ router.post('/register', upload.fields([
     }
 ]),isAdmin, registerUser);
 
-router.get('/all-users', verifyJWT, isAdmin, getAllUsers);
+router.get('/all-users',verifyJWT, isAdmin, getAllUsers);
 router.get('/agent-customers',verifyJWT , getAgentCustomers);
 router.post('/login', loginUser)
 router.post('/logout', verifyJWT, logoutUser)

@@ -31,7 +31,7 @@ export const verifyJWT = asyncHandler(async(req, _, next) => {
 })
 
 export const isAdmin = (req, res, next) => {
-    console.log(req.user, "data")
+ 
     if (req.user.role !== "admin") {
         throw new ApiError(400, "Unable to access contact the admin")
         
