@@ -128,9 +128,7 @@ const loginUser = asyncHandler(async (req, res) => {
   const options = {
     httpOnly: true,
 
-    expires: new Date(
-      Date.now() + process.env.COOKIE_EXPIRE * 24 * 60 * 60 * 1000
-    ),
+    maxAge: 7 * 24 * 60 * 60 * 1000,
     secure: true,
     sameSite: "None",
   };
@@ -164,9 +162,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure: true,
     sameSite: "None",
-    expires: new Date(
-      Date.now() + process.env.COOKIE_EXPIRE * 24 * 60 * 60 * 1000
-    ),
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   };
 
   return res
