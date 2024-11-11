@@ -4,7 +4,10 @@ import { Transaction } from "../models/transaction.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const getAllTransactions = asyncHandler(async (req, res) => {
-  const allTransactions = await Transaction.find();
+  const allTransactions = await Transaction.find()
+    .populate("customer")
+    .populate("loan")
+    .sort({ paymentDate: -1 });
   res.status(201).json({
     success: true,
     data: allTransactions,
